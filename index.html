@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagram Translate | Traducción Técnica de Precisión</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="hero-bg">
+        <img src="hero.png" alt="Background">
+    </div>
+
+    <div id="app-container">
+        <header>
+            <div class="logo">
+                Diagram<span>Translate</span>
+            </div>
+            <nav>
+                <!-- Opciones de navegación adicionales si fueran necesarias -->
+            </nav>
+        </header>
+
+        <main class="main-card">
+            <section class="upload-section">
+                <h1 id="i18n-title">Traduce tus documentos</h1>
+                <p class="subtitle" id="i18n-subtitle">Especializado en planos eléctricos y documentos técnicos complejos con preservación de diseño original.</p>
+                
+                <div class="drop-zone" id="drop-zone">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
+                    </svg>
+                    <div class="drop-text">
+                        <h3 id="i18n-drop-title">Arrastra tus archivos aquí</h3>
+                        <p id="i18n-drop-subtitle">PDF, Word, DXF o imágenes (PNG/JPG)</p>
+                    </div>
+                    <input type="file" id="file-input" hidden multiple>
+                </div>
+
+                <div class="progress-container" id="progress-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                    <div class="progress-status">
+                        <span id="status-text">Procesando capas del PDF...</span>
+                        <span id="percent-text">45%</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="controls">
+                <div class="control-group">
+                    <label id="i18n-label-target">Idioma de Destino</label>
+                    <select id="target-lang">
+                        <option value="es">Español</option>
+                        <option value="en">Inglés</option>
+                        <option value="de">Alemán</option>
+                        <option value="fr">Francés</option>
+                        <option value="zh">Chino</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label id="i18n-label-format">Formato de Salida</label>
+                    <select id="output-format">
+                        <option value="pdf" id="i18n-opt-pdf">Mismo que original (PDF)</option>
+                        <option value="docx">Microsoft Word (.docx)</option>
+                        <option value="svg" id="i18n-opt-svg">Vectorial Editable (.svg)</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label id="i18n-label-precision">Modo de Precisión</label>
+                    <select id="precision-mode">
+                        <option value="standard" id="i18n-opt-standard">Estándar (Texto fluido)</option>
+                        <option value="schematic" id="i18n-opt-schematic">Esquema Técnico (Layout Exacto)</option>
+                        <option value="ocr" id="i18n-opt-ocr">Escaneado (OCR avanzado)</option>
+                    </select>
+                </div>
+
+                <button class="btn-primary" id="translate-btn">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+                    </svg>
+                    <span id="i18n-btn-text">Comenzar Traducción</span>
+                </button>
+
+                <button class="btn-primary" id="download-btn" style="display: none; background: linear-gradient(to right, var(--accent), #059669);">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    <span id="i18n-download-text">Descargar Documento</span>
+                </button>
+            </section>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
