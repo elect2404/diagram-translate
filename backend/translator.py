@@ -1,13 +1,7 @@
 import os
 import requests
-from pypdf import PdfReader
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import cm
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib import colors
 
-# Language code mapping (UI value -> MyMemory format)
+# Language code mapping
 LANG_MAP = {
     "es": "es-ES",
     "en": "en-GB",
@@ -25,11 +19,11 @@ class DiagramTranslator:
         self.target_lang = target_lang.lower()
 
     def translate_text(self, text):
-        """Translate using MyMemory API — free, no key needed, very reliable."""
+        """Translate using MyMemory API — free, no key needed."""
         if not text or not text.strip() or len(text.strip()) < 2:
             return text
 
-        # MyMemory has a 500 char limit per request, so chunk if needed
+        # Chunk if too long
         if len(text) > 480:
             return self._translate_in_chunks(text)
 
@@ -45,20 +39,17 @@ class DiagramTranslator:
             if resp.status_code == 200:
                 data = resp.json()
                 translated = data.get("responseData", {}).get("translatedText", "")
-                # MyMemory returns the original text if it can't translate
-                if translated and translated.upper() != text.upper():
+                if translated and translated.upper() != text.strip().upper():
                     return translated
         except Exception as e:
-            print(f"MyMemory error: {e}")
+            print(f"Translation error: {e}")
 
-        return text  # Return original if translation fails
+        return text
 
     def _translate_in_chunks(self, text, chunk_size=450):
-        """Split long text into chunks and translate each one."""
+        """Split long text into chunks and translate each."""
         words = text.split()
-        chunks = []
-        current_chunk = []
-        current_len = 0
+        chunks, current_chunk, current_len = [], [], 0
 
         for word in words:
             if current_len + len(word) + 1 > chunk_size:
@@ -72,85 +63,73 @@ class DiagramTranslator:
         if current_chunk:
             chunks.append(" ".join(current_chunk))
 
-        translated_chunks = [self.translate_text(chunk) for chunk in chunks]
-        return " ".join(translated_chunks)
+        return " ".join(self.translate_text(c) for c in chunks)
 
     def process_pdf(self, input_path, output_path):
         """
-        Extract text from PDF, translate it, and generate a new clean PDF.
-        Uses pypdf (lightweight) + reportlab for output.
+        Layout-preserving PDF translation using PyMuPDF.
+        Replaces each text span in-place while keeping all graphics intact.
         """
-        try:
-            # 1. Extract text from each page
-            reader = PdfReader(input_path)
-            pages_text = []
-            for page in reader.pages:
-                text = page.extract_text() or ""
-                pages_text.append(text)
+        import fitz  # PyMuPDF
 
-            # 2. Translate all text
-            translated_pages = []
-            for page_text in pages_text:
-                if page_text.strip():
-                    translated = self.translate_text(page_text)
-                    translated_pages.append(translated)
-                else:
-                    translated_pages.append("")
+        doc = fitz.open(input_path)
 
-            # 3. Build a new PDF with the translated content
-            doc = SimpleDocTemplate(
-                output_path,
-                pagesize=A4,
-                rightMargin=2*cm,
-                leftMargin=2*cm,
-                topMargin=2*cm,
-                bottomMargin=2*cm
-            )
+        for page in doc:
+            blocks = page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE)["blocks"]
 
-            styles = getSampleStyleSheet()
-            normal_style = ParagraphStyle(
-                'CustomNormal',
-                parent=styles['Normal'],
-                fontSize=10,
-                leading=14,
-                spaceAfter=6,
-            )
-            title_style = ParagraphStyle(
-                'CustomTitle',
-                parent=styles['Heading2'],
-                fontSize=11,
-                textColor=colors.HexColor('#1e3a5f'),
-                spaceAfter=4,
-            )
+            for b in blocks:
+                if b.get("type") != 0:
+                    continue  # Skip images and other non-text blocks
 
-            story = []
-            for i, text in enumerate(translated_pages):
-                if i > 0:
-                    story.append(Spacer(1, 0.5*cm))
-                    # Page separator
-                    story.append(Paragraph(f"— Page {i+1} —", title_style))
+                for line in b.get("lines", []):
+                    for span in line.get("spans", []):
+                        original = span.get("text", "")
+                        if not original.strip():
+                            continue
 
-                if text.strip():
-                    # Split by lines and add paragraphs
-                    for line in text.split('\n'):
-                        if line.strip():
-                            try:
-                                story.append(Paragraph(line.strip(), normal_style))
-                            except Exception:
-                                # Skip lines with problematic characters
-                                pass
+                        translated = self.translate_text(original)
+                        if translated == original:
+                            continue
 
-            if not story:
-                story.append(Paragraph("No text could be extracted from this PDF.", normal_style))
+                        # Redact (erase) original text bbox
+                        bbox = fitz.Rect(span["bbox"])
+                        page.add_redact_annot(bbox, fill=(1, 1, 1))
+                        page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE)
 
-            doc.build(story)
-            return output_path
+                        # Write translated text in same position, font size and color
+                        size = span.get("size", 10)
+                        color_int = span.get("color", 0)
+                        r = ((color_int >> 16) & 0xFF) / 255
+                        g = ((color_int >> 8) & 0xFF) / 255
+                        b = (color_int & 0xFF) / 255
 
-        except Exception as e:
-            print(f"Error processing PDF: {e}")
-            raise
+                        # Auto-shrink font if translated text is longer
+                        text_width = bbox.width
+                        estimated_char_width = size * 0.6
+                        max_chars = max(1, int(text_width / estimated_char_width))
+                        if len(translated) > max_chars:
+                            size = max(5, size * (max_chars / len(translated)))
+
+                        page.insert_text(
+                            fitz.Point(bbox.x0, bbox.y1 - 1),
+                            translated,
+                            fontsize=size,
+                            color=(r, g, b),
+                        )
+
+        doc.save(output_path, garbage=4, deflate=True)
+        doc.close()
+        return output_path
+
+    def process_image_pdf(self, input_path, output_path):
+        """
+        Fallback for scanned/image PDFs using OCR would go here.
+        For now, copies the file.
+        """
+        import shutil
+        shutil.copy(input_path, output_path)
+        return output_path
 
 
 if __name__ == "__main__":
-    translator = DiagramTranslator(target_lang="es")
-    print("Translator ready. Using pypdf + reportlab (lightweight mode).")
+    print("DiagramTranslator ready — PyMuPDF layout-preserving mode.")
