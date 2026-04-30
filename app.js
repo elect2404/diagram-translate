@@ -124,7 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // API Configuration
     const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
         ? 'http://localhost:8000'
-        : window.location.origin;
+        : ''; // Use relative paths in production
 
     const downloadBtn = document.getElementById('download-btn');
     let downloadLink = "";
@@ -180,7 +180,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateProgress(100, stages);
                 statusText.style.color = 'var(--accent)';
                 
-                downloadLink = `${API_URL}${data.download_url}`;
+                // Construct correct download link
+                const path = data.download_url.startsWith('/') ? data.download_url : `/${data.download_url}`;
+                downloadLink = `${API_URL}${path}`;
                 
                 setTimeout(() => {
                     alert(t.alertSuccess);
