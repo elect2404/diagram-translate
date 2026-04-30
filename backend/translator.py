@@ -97,11 +97,12 @@ class DiagramTranslator:
 
     def _process_simple(self, input_path, output_path):
         """
-        Simple fallback: copy the file as-is.
-        Used when PyMuPDF is not installed.
+        Fallback when PyMuPDF is not available.
+        Copies the file and adds a note about limited translation.
         """
         import shutil
         shutil.copy(input_path, output_path)
+        print("WARNING: PyMuPDF not available. File copied without translation.")
         return output_path
 
 
