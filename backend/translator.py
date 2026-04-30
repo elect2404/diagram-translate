@@ -1,18 +1,22 @@
 import os
 import requests
 from pypdf import PdfReader
-from reportlab.lib.pagesizes import letter, A4
+from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib import colors
 
-# Free translation APIs - no key needed
-LIBRE_TRANSLATE_URLS = [
-    "https://translate.terraprint.co/translate",
-    "https://lt.vern.cc/translate",
-    "https://libretranslate.com/translate",
-]
+# Language code mapping (UI value -> MyMemory format)
+LANG_MAP = {
+    "es": "es-ES",
+    "en": "en-GB",
+    "de": "de-DE",
+    "fr": "fr-FR",
+    "zh": "zh-CN",
+    "pt": "pt-BR",
+    "it": "it-IT",
+}
 
 
 class DiagramTranslator:
@@ -21,30 +25,55 @@ class DiagramTranslator:
         self.target_lang = target_lang.lower()
 
     def translate_text(self, text):
-        """Translate text using LibreTranslate (free, no API key needed)."""
-        if not text.strip() or len(text.strip()) < 2:
+        """Translate using MyMemory API — free, no key needed, very reliable."""
+        if not text or not text.strip() or len(text.strip()) < 2:
             return text
 
-        payload = {
-            "q": text,
-            "source": "auto",
-            "target": self.target_lang,
-            "format": "text"
-        }
-        headers = {"Content-Type": "application/json"}
+        # MyMemory has a 500 char limit per request, so chunk if needed
+        if len(text) > 480:
+            return self._translate_in_chunks(text)
 
-        for url in LIBRE_TRANSLATE_URLS:
-            try:
-                resp = requests.post(url, json=payload, headers=headers, timeout=8)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    translated = data.get("translatedText", "")
-                    if translated:
-                        return translated
-            except Exception:
-                continue
+        target = LANG_MAP.get(self.target_lang, f"{self.target_lang}-{self.target_lang.upper()}")
 
-        return text  # Return original if all APIs fail
+        try:
+            url = "https://api.mymemory.translated.net/get"
+            params = {
+                "q": text.strip(),
+                "langpair": f"auto|{target}",
+            }
+            resp = requests.get(url, params=params, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                translated = data.get("responseData", {}).get("translatedText", "")
+                # MyMemory returns the original text if it can't translate
+                if translated and translated.upper() != text.upper():
+                    return translated
+        except Exception as e:
+            print(f"MyMemory error: {e}")
+
+        return text  # Return original if translation fails
+
+    def _translate_in_chunks(self, text, chunk_size=450):
+        """Split long text into chunks and translate each one."""
+        words = text.split()
+        chunks = []
+        current_chunk = []
+        current_len = 0
+
+        for word in words:
+            if current_len + len(word) + 1 > chunk_size:
+                chunks.append(" ".join(current_chunk))
+                current_chunk = [word]
+                current_len = len(word)
+            else:
+                current_chunk.append(word)
+                current_len += len(word) + 1
+
+        if current_chunk:
+            chunks.append(" ".join(current_chunk))
+
+        translated_chunks = [self.translate_text(chunk) for chunk in chunks]
+        return " ".join(translated_chunks)
 
     def process_pdf(self, input_path, output_path):
         """
