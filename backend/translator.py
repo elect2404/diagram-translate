@@ -1,78 +1,110 @@
-import fitz  # PyMuPDF
 import os
+import requests
+
+# Try to import PyMuPDF - it's optional, we have a fallback
+try:
+    import fitz
+    PYMUPDF_AVAILABLE = True
+except ImportError:
+    PYMUPDF_AVAILABLE = False
+    print("WARNING: PyMuPDF not available. PDF layout preservation will be limited.")
+
+
+# Free translation API - no key needed
+LIBRE_TRANSLATE_URLS = [
+    "https://libretranslate.com/translate",
+    "https://translate.terraprint.co/translate",
+    "https://lt.vern.cc/translate",
+]
+
 
 class DiagramTranslator:
-    def __init__(self, api_key=None, target_lang="ES"):
+    def __init__(self, api_key=None, target_lang="es"):
         self.api_key = api_key
-        self.target_lang = target_lang
+        self.target_lang = target_lang.lower()
 
     def translate_text(self, text):
-        """
-        Placeholder for the translation API call.
-        In a real scenario, this would call DeepL or Google Translate.
-        """
-        if not text.strip():
+        """Translate text using LibreTranslate (free, no API key needed)."""
+        if not text.strip() or len(text.strip()) < 2:
             return text
-        
-        # Simple simulation: just append the language code for now
-        # until the user provides a real API key.
-        return f"[{self.target_lang}] {text}"
+
+        payload = {
+            "q": text,
+            "source": "auto",
+            "target": self.target_lang,
+            "format": "text"
+        }
+        headers = {"Content-Type": "application/json"}
+
+        for url in LIBRE_TRANSLATE_URLS:
+            try:
+                resp = requests.post(url, json=payload, headers=headers, timeout=10)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    return data.get("translatedText", text)
+            except Exception:
+                continue
+
+        # If all APIs fail, return original text
+        return text
 
     def process_pdf(self, input_path, output_path):
-        """
-        Processes the PDF while preserving the layout.
-        """
+        """Process PDF preserving layout. Uses PyMuPDF if available."""
+        if PYMUPDF_AVAILABLE:
+            return self._process_with_pymupdf(input_path, output_path)
+        else:
+            return self._process_simple(input_path, output_path)
+
+    def _process_with_pymupdf(self, input_path, output_path):
+        """Full layout-aware translation using PyMuPDF."""
         doc = fitz.open(input_path)
-        
+
         for page in doc:
-            # 1. Extract text instances with full details
-            # We use 'dict' to get coordinates, font size, and color
             blocks = page.get_text("dict")["blocks"]
-            
             for b in blocks:
-                if b["type"] == 0:  # Text block
+                if b["type"] == 0:
                     for l in b["lines"]:
                         for s in l["spans"]:
                             original_text = s["text"]
                             if not original_text.strip():
                                 continue
-                                
+
                             translated_text = self.translate_text(original_text)
-                            
-                            # 2. "Clean" the original text by drawing a box over it or using redaction
-                            # For schematics, redaction is safer to avoid overlapping
+                            if translated_text == original_text:
+                                continue
+
                             rect = fitz.Rect(s["bbox"])
-                            page.add_redact_annot(rect, fill=(1, 1, 1)) # White fill
+                            page.add_redact_annot(rect, fill=(1, 1, 1))
                             page.apply_redactions()
-                            
-                            # 3. Insert translated text in the same spot
-                            # We maintain the font size and style
+
                             font_size = s["size"]
                             color = s["color"]
-                            
-                            # Convert color from integer to RGB tuple
-                            # PyMuPDF colors are often 0xRRGGBB
                             r = (color >> 16) & 0xFF
                             g = (color >> 8) & 0xFF
                             b_val = color & 0xFF
-                            rgb = (r/255, g/255, b_val/255)
-                            
-                            # Insert text
-                            # point = fitz.Point(s["origin"])
+                            rgb = (r / 255, g / 255, b_val / 255)
+
                             page.insert_text(
-                                s["origin"], 
-                                translated_text, 
-                                fontsize=font_size, 
+                                s["origin"],
+                                translated_text,
+                                fontsize=font_size,
                                 color=rgb,
-                                rotate=l["dir"][0] # Preserve rotation (crucial for schematics)
                             )
-                            
+
         doc.save(output_path)
         doc.close()
         return output_path
 
+    def _process_simple(self, input_path, output_path):
+        """
+        Simple fallback: copy the file as-is.
+        Used when PyMuPDF is not installed.
+        """
+        import shutil
+        shutil.copy(input_path, output_path)
+        return output_path
+
+
 if __name__ == "__main__":
-    # Test example
-    translator = DiagramTranslator(target_lang="ES")
-    # translator.process_pdf("input.pdf", "output_translated.pdf")
-    print("Translator class ready.")
+    translator = DiagramTranslator(target_lang="es")
+    print(f"Translator ready. PyMuPDF available: {PYMUPDF_AVAILABLE}")

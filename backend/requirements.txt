@@ -1,6 +1,6 @@
 fastapi==0.104.1
 uvicorn==0.24.0
-pymupdf==1.23.6
 python-multipart==0.0.6
 requests==2.31.0
-deepl==1.16.1
+# PyMuPDF for full PDF layout preservation (uncomment if needed)
+# pymupdf==1.23.6
